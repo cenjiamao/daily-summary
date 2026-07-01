@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>海报样式预览 - 选一张你喜欢的 ✨</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: linear-gradient(135deg, #e8eaf6 0%, #fce4ec 100%);
+    min-height: 100vh;
+    padding: 20px 16px 40px;
+  }
+  h1 {
+    text-align: center;
+    font-size: 22px;
+    color: #333;
+    margin-bottom: 6px;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 14px;
+    color: #888;
+    margin-bottom: 24px;
+  }
+  .grid {
+    max-width: 420px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+  .card {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.10);
+    overflow: hidden;
+    transition: transform 0.2s;
+  }
+  .card:hover { transform: translateY(-3px); }
+  .card-img {
+    width: 100%;
+    display: block;
+  }
+  .card-body {
+    padding: 14px 18px 18px;
+  }
+  .card-title {
+    font-size: 17px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .card-title.d { color: #00796b; }
+  .card-title.e { color: #ad1457; }
+  .card-desc {
+    font-size: 13px;
+    color: #666;
+    line-height: 1.6;
+  }
+  .tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-top: 10px;
+  }
+  .tag.d { background: #e0f2f1; color: #00796b; }
+  .tag.e { background: #fce4ec; color: #ad1457; }
+  .tip {
+    text-align: center;
+    margin-top: 28px;
+    font-size: 13px;
+    color: #aaa;
+  }
+</style>
+</head>
+<body>
+
+<h1>🎨 海报样式预览</h1>
+<p class="subtitle">以下两张海报，选一张你喜欢的告诉我～</p>
+
+<div class="grid">
+
+  <!-- 海报D -->
+  <div class="card">
+    <img class="card-img" src="poster-D-preview.png" alt="海报D 蓝绿极光">
+    <div class="card-body">
+      <div class="card-title d">🌌 海报 D — 蓝绿极光</div>
+      <div class="card-desc">
+        深紫蓝→青绿渐变背景，极光光带飘逸，星星点缀。整体感觉<strong>神秘梦幻</strong>，像深夜里的北极光。
+      </div>
+      <div class="tag d">蓝绿系 · 极光 · 星空</div>
+    </div>
+  </div>
+
+  <!-- 海报E -->
+  <div class="card">
+    <img class="card-img" src="poster-E-preview.png" alt="海报E 粉紫晚霞">
+    <div class="card-body">
+      <div class="card-title e">🌅 海报 E — 粉紫晚霞</div>
+      <div class="card-desc">
+        深紫→粉红→暖粉渐变，晚霞云层，同样有星星。整体感觉<strong>温柔浪漫</strong>，像黄昏时分的海边晚霞。
+      </div>
+      <div class="tag e">粉紫系 · 晚霞 · 温柔</div>
+    </div>
+  </div>
+
+</div>
+
+<p class="tip">👆 长按保存喜欢的海报，或告诉我选哪张～</p>
+
+</body>
+</html>

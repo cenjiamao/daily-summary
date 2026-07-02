@@ -4,22 +4,19 @@ on:
   schedule:
     # 每天早上7:30（北京时间 = UTC+8，即 UTC 23:30 前一天）
     - cron: '30 23 * * *'
-  workflow_dispatch:  # 支持手动触发
+  workflow_dispatch:
 
-# 添加写入权限
 permissions:
   contents: write
 
 jobs:
   generate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     
     steps:
     - name: 📇 Checkout 仓库
       uses: actions/checkout@v4
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
     
     - name: 🐍 设置 Python
       uses: actions/setup-python@v5
@@ -29,14 +26,12 @@ jobs:
     - name: 📦 安装依赖
       run: pip install requests
     
-    - name: 🚀 生成每日汇总 HTML
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: 🚀 生成每日汇总
       run: python3 .github/scripts/generate_summary.py
     
     - name: 📤 提交并推送
       run: |
         git config user.name "WorkBuddy Auto"
         git config user.email "workbuddy@auto"
-        git add index.html 每日汇总_history.json || true
-        git diff --cached --quiet || (git commit -m "Update: $(date +'%Y-%m-%d') 每日汇总 [自动生成]" && git push)
+        git add index.html 每日汇总_history.json
+        git diff --cached --quiet || (git commit -m "Update: $(TZ='Asia/Shanghai' date +'%Y-%m-%d') 每日汇总" && git push)

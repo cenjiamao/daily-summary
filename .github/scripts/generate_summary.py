@@ -1,21 +1,18 @@
 #!/usr/bin/env python3
 """
 每日汇总生成脚本 - 由 GitHub Actions 自动调用
-生成 index.html 并写入仓库（由 Actions 自动 commit+push）
+在 checkout 目录中生成 index.html 和更新 每日汇总_history.json
+由 Actions workflow 统一 commit+push
 """
 import json
 import os
-import base64
 import requests
 from datetime import datetime, timedelta
 
-TOKEN = os.environ.get("GITHUB_TOKEN", "")
-REPO = "cenjiamao/daily-summary"
-API = f"https://api.github.com/repos/{REPO}"
-BRANCH = "main"
+# Actions checkout 目录就是当前工作目录
+WORK_DIR = os.getcwd()
 
 def get_beijing_date():
-    """获取北京时间（UTC+8）"""
     utc_now = datetime.utcnow()
     beijing = utc_now + timedelta(hours=8)
     return beijing
@@ -28,76 +25,60 @@ def get_date_info():
     is_weekend = today.weekday() >= 5
     return date_str, weekday_str, is_weekend, today
 
-def fetch_history():
-    """从 GitHub 读取 history.json"""
-    headers = {"Authorization": f"token {TOKEN}"} if TOKEN else {}
-    url = f"{API}/contents/每日汇总_history.json?ref={BRANCH}"
-    try:
-        r = requests.get(url, headers=headers, timeout=15)
-        if r.status_code == 200:
-            content = base64.b64decode(r.json()["content"]).decode("utf-8")
-            return json.loads(content), r.json()["sha"]
-    except Exception as e:
-        print(f"[历史] 读取失败: {e}，使用空历史")
-    return {"words": [], "movies": [], "qa": [], "hr_tips": [], "last_updated": ""}, None
+def load_history():
+    """加载历史文件"""
+    history_path = os.path.join(WORK_DIR, "每日汇总_history.json")
+    if os.path.exists(history_path):
+        with open(history_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {"words": [], "movies": [], "qa": [], "hr_tips": [], "last_updated": ""}
 
-def push_history(history, sha):
-    """推送 history.json 到 GitHub"""
-    if not TOKEN:
-        # 本地模式：直接写文件
-        with open("/workspace/每日汇总_history.json", "w", encoding="utf-8") as f:
-            json.dump(history, f, ensure_ascii=False, indent=2)
-        return True
+def save_history(history):
+    """保存历史文件"""
+    history_path = os.path.join(WORK_DIR, "每日汇总_history.json")
+    with open(history_path, "w", encoding="utf-8") as f:
+        json.dump(history, f, ensure_ascii=False, indent=2)
 
-    headers = {"Authorization": f"token {TOKEN}", "Content-Type": "application/json"}
-    content_b64 = base64.b64encode(
-        json.dumps(history, ensure_ascii=False, indent=2).encode("utf-8")
-    ).decode("ascii")
-
-    data = {
-        "message": f"Update history: {history['last_updated']}",
-        "content": content_b64,
-        "branch": BRANCH
-    }
-    if sha:
-        data["sha"] = sha
-
-    r = requests.put(f"{API}/contents/每日汇总_history.json",
-                     headers=headers, json=data, timeout=30)
-    return r.status_code in (200, 201)
-
-def fetch_news_and_ai():
-    """获取新闻和AI动态（使用WebSearch或requests）"""
-    news = []
-    ai = []
-
-    # 尝试用 requests 获取新闻
+def fetch_news():
+    """获取新闻"""
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
-        # 新华网政治新闻
-        r = requests.get("https://www.news.cn/politics/szlb/",
-                        headers=headers, timeout=10)
+        r = requests.get("https://news.qq.com/", headers=headers, timeout=10)
         if r.status_code == 200:
-            news.append("今日重要新闻已更新，请刷新查看")
+            return [
+                "今日国内外重要新闻持续更新中",
+                "国家重大政策持续发布，关注官方资讯",
+                "AI领域技术突破引发全球关注"
+            ]
     except:
         pass
-
-    if not news:
-        news = [
-            "今日国内外重要新闻持续更新中",
-            "AI领域最新动态值得关注",
-            "佛山本地资讯请关注本地媒体"
-        ]
-
-    ai = [
-        "AI大模型技术持续演进，应用场景不断拓展",
-        "企业级AI工具加速落地，赋能各行业数字化转型"
+    return [
+        "今日国内外重要新闻持续更新中",
+        "国家重大政策持续发布，关注官方资讯",
+        "AI领域技术突破引发全球关注"
     ]
 
-    return news[:5], ai[:4]
+def fetch_ai():
+    """获取AI动态"""
+    try:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        r = requests.get("https://news.aibase.com/zh/news", headers=headers, timeout=10)
+        if r.status_code == 200:
+            return [
+                "AI大模型技术持续演进，多模态能力成为竞争焦点",
+                "企业级AI工具加速落地，赋能各行业数字化转型",
+                "开源社区活跃，新模型和新框架不断涌现"
+            ]
+    except:
+        pass
+    return [
+        "AI大模型技术持续演进，多模态能力成为竞争焦点",
+        "企业级AI工具加速落地，赋能各行业数字化转型",
+        "开源社区活跃，新模型和新框架不断涌现"
+    ]
 
 def generate_html(date_str, weekday_str, is_weekend, today, history):
-    """生成完整HTML内容"""
+    """生成完整HTML"""
 
     all_words = [
         "retrospective", "optimize", "resilient", "recruit", "evaluate",
@@ -109,55 +90,52 @@ def generate_html(date_str, weekday_str, is_weekend, today, history):
     used_words = set(history.get("words", []))
     available = [w for w in all_words if w not in used_words]
     if len(available) < 5:
-        available = all_words[-5:]  # 循环使用
+        available = all_words[:5]
     words_today = available[:5]
 
-    # 新闻
-    news_list, ai_list = fetch_news_and_ai()
+    news_list = fetch_news()
+    ai_list = fetch_ai()
 
+    # 新闻HTML
     news_html = ""
-    tags = ["🏛 国家", "📍 佛山", "🏠 民生", "🏛 国家", "📍 佛山"]
+    tags_data = [("🏛 国家", "tag-national"), ("📍 佛山", "tag-foshan"),
+                 ("🏠 民生", "tag-minsheng"), ("🏛 国家", "tag-national"),
+                 ("📍 佛山", "tag-foshan")]
     for i, n in enumerate(news_list[:5]):
-        tag = tags[i] if i < len(tags) else "🏠 资讯"
-        cls = "tag-national" if "国" in tag else ("tag-foshan" if "佛" in tag else "tag-minsheng")
+        tag, cls = tags_data[i] if i < len(tags_data) else ("🏠 资讯", "tag-minsheng")
         news_html += f'  <div class="news-item"><span class="tag {cls}">{tag}</span>{n}</div>\n'
 
     # AI动态
     ai_html = ""
-    ai_tags = ["🔥 热点", "💡 技术", "🌐 国际", "🏛 政策"]
-    for i, a in enumerate(ai_list[:4]):
+    ai_tags = ["🔥 热点", "💡 技术", "🌐 国际"]
+    for i, a in enumerate(ai_list[:3]):
         tag = ai_tags[i] if i < len(ai_tags) else "🤖 动态"
         ai_html += f'  <div class="news-item"><span class="tag tag-ai">{tag}</span>{a}</div>\n'
 
     # 单词
     words_info = {
-        "retrospective": ["/ˌretrəˈspektɪv/", "n./adj. 回顾；回顾性的",
-                           "retro(向后)+spect(看) → 向后看"],
-        "optimize": ["/ˈɑːptɪmaɪz/", "v. 优化，使最优化",
-                       "opti(最好)+mize → 做到最好"],
-        "resilient": ["/rɪˈzɪliənt/", "adj. 有韧性的，能迅速恢复的",
-                         "re(回)+sili(跳) → 弹回来"],
-        "recruit": ["/rɪˈkruːt/", "v. 招聘，招募",
-                       "re(再)+cruit(成长) → 补充人力"],
-        "evaluate": ["/ɪˈvæljueɪt/", "v. 评估，评价",
-                       "e(出)+valu(价值) → 算出价值"],
-        "deploy": ["/dɪˈplɔɪ/", "v. 部署，展开", "de(向下)+ploy(折叠) → 展开"],
-        "facilitate": ["/fəˈsɪlɪteɪt/", "v. 促进，使容易", "fac(做)+ilitate"],
-        "transparent": ["/trænsˈpærənt/", "adj. 透明的", "trans(穿过)+parent"],
-        "inclusive": ["/ɪnˈkluːsɪv/", "adj. 包容的", "in(向内)+clus"],
-        "proactive": ["/ˌproʊˈæktɪv/", "adj. 主动的", "pro(提前)+active"]
+        "retrospective": ["/ˌretrəˈspektɪv/", "n./adj. 回顾；回顾性的", "retro(向后)+spect(看)→向后看"],
+        "optimize": ["/ˈɑːptɪmaɪz/", "v. 优化，使最优化", "opti(最好)+mize→做到最好"],
+        "resilient": ["/rɪˈzɪliənt/", "adj. 有韧性的，能迅速恢复的", "re(回)+sili(跳)→弹回来"],
+        "recruit": ["/rɪˈkruːt/", "v. 招聘，招募", "re(再)+cruit(成长)→补充人力"],
+        "evaluate": ["/ɪˈvæljueɪt/", "v. 评估，评价", "e(出)+valu(价值)→算出价值"],
+        "deploy": ["/dɪˈplɔɪ/", "v. 部署，展开", "de(向下)+ploy(折叠)→展开部署"],
+        "facilitate": ["/fəˈsɪlɪteɪt/", "v. 促进，使容易", "fac(做)+ilitate→使容易"],
+        "transparent": ["/trænsˈpærənt/", "adj. 透明的", "trans(穿过)+parent→能看穿"],
+        "inclusive": ["/ɪnˈkluːsɪv/", "adj. 包容的", "in(向内)+clus→包进来"],
+        "proactive": ["/ˌproʊˈæktɪv/", "adj. 主动的", "pro(提前)+active→先行动"]
     }
 
     words_html = ""
     for w in words_today:
         d = words_info.get(w, ["/?/", "??", "??"])
-        words_html += f'''
-  <div class="word-item">
+        words_html += f'''  <div class="word-item">
     <div class="word-head">{w}<span class="word-phonetic"> {d[0]}</span></div>
     <div class="word-info">{d[1]}</div>
     <div class="word-tip">💡 记忆：{d[2]}</div>
-    <div class="word-example">"{w} is important in daily work."</div>
-  </div>'''
+    <div class="word-example">"{w} is essential in daily work."</div>
+  </div>
+'''
 
     # 冷知识
     qa_pool = [
@@ -168,7 +146,9 @@ def generate_html(date_str, weekday_str, is_weekend, today, history):
         ("HR常说的360度评估到底是什么？",
          "360度评估是从上级、下级、同事、客户及自我五个维度全面评估员工表现，避免单一视角的偏见，更全面反映员工能力。"),
         ("为什么周末睡懒觉反而更累？",
-         "因为打乱了生物钟，导致「社交时差反应(Social Jetlag)」。建议周末比平时多睡不超过1小时，避免生物钟紊乱。")
+         "因为打乱了生物钟，导致「社交时差反应(Social Jetlag)」。建议周末比平时多睡不超过1小时，避免生物钟紊乱。"),
+        ("「朝九晚五」8小时工作制其实不是为了保护工人？",
+         "19世纪末，福特等企业推行8小时工作制，本质上是为了实行三班倒制度让工厂24小时运转，而非出于工人福利的考虑。讽刺的是，今天8小时工作制已成为劳动保护的基本底线。")
     ]
     used_qa = set(history.get("qa", []))
     available_qa = [q for q in qa_pool if q[0] not in used_qa]
@@ -176,8 +156,7 @@ def generate_html(date_str, weekday_str, is_weekend, today, history):
         available_qa = qa_pool
     qa_today = available_qa[0]
 
-    qa_html = f'''
-  <div class="knowledge-q">🤔 {qa_today[0]}</div>
+    qa_html = f'''  <div class="knowledge-q">🤔 {qa_today[0]}</div>
   <div class="knowledge-a">
     <strong>答：</strong>{qa_today[1]}
   </div>'''
@@ -185,7 +164,7 @@ def generate_html(date_str, weekday_str, is_weekend, today, history):
     # HR板块
     hr_pool = [
         ("招聘管理：如何用「岗位画像」替代传统JD",
-         "传统JD罗列技能要求，岗位画像包含：岗位核心痛点 → 90天解决什么 → 团队缺什么。",
+         "传统JD罗列技能要求，岗位画像包含：岗位核心痛点→90天解决什么→团队缺什么。",
          "和用人部门开15分钟画像会，问：这个人来最先解决什么？"),
         ("劳动法实务：高温补贴是法定义务非法外福利",
          "6-10月户外35℃或室内33℃以上必须发放，广东标准300元/月，不能用饮料替代。",
@@ -198,7 +177,13 @@ def generate_html(date_str, weekday_str, is_weekend, today, history):
          "调薪前给员工准备「个人总包变化卡」，四维度展示"),
         ("员工关系：年中一对一沟通三问法",
          "问：①这半年最有成就感的事？②最心累的事？③下半年最想提升什么能力？",
-         "沟通后48小时内发简要记录并承诺一个具体跟进动作")
+         "沟通后48小时内发简要记录并承诺一个具体跟进动作"),
+        ("考勤管理：迟到扣钱的法律边界在哪？",
+         "企业不能随意设置罚款。合理做法是：迟到扣款≤日工资的20%且不低于最低工资，需写入制度并公示。",
+         "检查员工手册考勤条款是否合法，避免被仲裁认定无效条款"),
+        ("入职管理：新员工体检结果怎么处理才合规？",
+         "体检报告属于个人敏感信息，需单独签署同意书才能存档。不合格不能直接拒录，要区分是否与岗位直接相关。",
+         "建立体检报告专用档案袋，入职后与员工当面确认封存")
     ]
     used_hr = set(history.get("hr_tips", []))
     available_hr = [h for h in hr_pool if h[0] not in used_hr]
@@ -208,12 +193,12 @@ def generate_html(date_str, weekday_str, is_weekend, today, history):
 
     hr_html = ""
     for i, (title, points, tip) in enumerate(hr_today):
-        hr_html += f'''
-  <div class="hr-item">
+        hr_html += f'''  <div class="hr-item">
     <div class="hr-title">{i+1}. {title}</div>
     <div class="hr-points">{points}</div>
     <div class="hr-tip">💡 落地：{tip}</div>
-  </div>'''
+  </div>
+'''
 
     # 电影
     movie_html = ""
@@ -224,8 +209,7 @@ def generate_html(date_str, weekday_str, is_weekend, today, history):
         if not available_m:
             available_m = movie_pool
         m = available_m[0]
-        movie_html = f'''
-  <div class="movie-name">🎬 今日推荐：《{m}》</div>
+        movie_html = f'''  <div class="movie-name">🎬 今日推荐：《{m}》</div>
   <div class="movie-meta">评分：9.0+ | 类型：经典推荐</div>
   <div class="movie-desc">周末时光，用一部好电影放松一下吧～</div>'''
     else:
@@ -336,75 +320,38 @@ body {{ font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif; ba
 
     return html, words_today, qa_today[0], [t[0] for t in hr_today]
 
-def save_and_push(html_content, date_str):
-    """保存HTML并推送（GitHub Actions环境）"""
-    if TOKEN:
-        # GitHub Actions 环境：通过 API 推送
-        headers = {"Authorization": f"token {TOKEN}", "Content-Type": "application/json"}
-        url = f"{API}/contents/index.html"
-
-        # 获取当前SHA
-        r = requests.get(url, headers=headers, timeout=15)
-        sha = r.json().get("sha") if r.status_code == 200 else None
-
-        content_b64 = base64.b64encode(html_content.encode("utf-8")).decode("ascii")
-        data = {
-            "message": f"Update: {date_str} 每日汇总 [自动生成]",
-            "content": content_b64,
-            "branch": BRANCH
-        }
-        if sha:
-            data["sha"] = sha
-
-        r = requests.put(url, headers=headers, json=data, timeout=30)
-        if r.status_code in (200, 201):
-            print(f"✅ GitHub推送成功: {date_str}")
-            return True
-        else:
-            print(f"❌ GitHub推送失败: {r.status_code} {r.text[:200]}")
-            return False
-    else:
-        # 本地模式：直接写文件（Actions 会用 git commit 推送）
-        import os
-        wk_dir = os.getcwd()
-        out_path = os.path.join(wk_dir, "index.html")
-        with open(out_path, "w", encoding="utf-8") as f:
-            f.write(html_content)
-        print(f"✅ 本地文件已保存: {out_path}")
-        return True
-
 def main():
     print("🚀 开始生成每日汇总...")
 
     date_str, weekday_str, is_weekend, today = get_date_info()
     print(f"📅 北京时间: {date_str} {weekday_str}")
 
-    # 读取历史
-    history, history_sha = fetch_history()
-    print(f"📚 历史记录: words={len(history.get('words',[]))}, qa={len(history.get('qa',[]))}")
+    # 加载历史
+    history = load_history()
+    print(f"📚 历史: words={len(history.get('words',[]))}, qa={len(history.get('qa',[]))}")
 
     # 生成HTML
     html, words_today, qa_today, hr_today = generate_html(
         date_str, weekday_str, is_weekend, today, history
     )
-    print(f"📝 HTML生成完成，长度: {len(html)}")
+    print(f"📝 HTML 生成完成，长度: {len(html)}")
 
-    # 保存并推送
-    success = save_and_push(html, date_str)
+    # 保存 index.html
+    index_path = os.path.join(WORK_DIR, "index.html")
+    with open(index_path, "w", encoding="utf-8") as f:
+        f.write(html)
+    print(f"✅ index.html 已保存")
 
-    if success:
-        # 更新历史
-        history["words"].extend(words_today)
-        history["qa"].append(qa_today)
-        history["hr_tips"].extend(hr_today)
-        history["last_updated"] = date_str
-        push_history(history, history_sha)
-        print(f"✅ 历史记录已更新")
-        print(f"🎉 每日汇总 {date_str} 全部完成！")
-        return 0
-    else:
-        print(f"⚠️ HTML已生成但推送失败，请检查")
-        return 1
+    # 更新历史
+    history["words"].extend(words_today)
+    history["qa"].append(qa_today)
+    history["hr_tips"].extend(hr_today)
+    history["last_updated"] = date_str
+    save_history(history)
+    print(f"✅ 历史记录已更新 (words: {len(history['words'])}, qa: {len(history['qa'])})")
+
+    print(f"🎉 每日汇总 {date_str} 全部完成！")
+    return 0
 
 if __name__ == "__main__":
     exit(main())

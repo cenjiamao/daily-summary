@@ -28,6 +28,12 @@
 
 ---
 
+## 【最近变更 · 2026-07-29】
+- **UTF-8 编码加固（防乱码根因修复）**：7/29 自动化误将 `index.html` 以沙箱默认的 **GBK/CP936** 写入，但页面声明 `<meta charset="UTF-8">`，导致全站中文乱码、emoji 与音标丢失。
+  - Step 10 / Step 11 新增「强制 UTF-8（无 BOM）」指令，明确要求用 `open(..., encoding='utf-8')` 写入/追加，禁止依赖系统默认编码。
+  - Step 12 推送前新增「UTF-8 校验闸」：若 `index.html` 解码报错则判为 GBK，立即回到 Step 10 重写，**严禁推送乱码文件**。
+- 7/29 页面已用干净 UTF-8 版重建并推送（commit `085234a`），GitHub Pages 已恢复。
+
 ## 【最近变更 · 2026-07-28】
 - **英语区改版**：由「随机单词」改为「CET-4 场景复习」。每天从仓库 `cet4_pool.json`（234 个大学四级词）抽 5 个熟词，按「星期场景」给真实例句——周一💼职场 / 周二✈️差旅 / 周三🏠生活 / 周四📧邮件 / 周五🎒旅游 / 周六🛒琐事 / 周日🍳美食。
 - **Step 12 推送加固**：`git push` 增加 4 次重试 + 显式写入带 token 的远程地址，规避隔离沙箱偶发 TLS 中断导致漏更。
@@ -105,17 +111,27 @@ CSS样式：body{background:#0d1117;color:#e6edf3;display:flex;justify-content:c
 HTML头部含：<meta property="og:site_name" content="毛儿の每日汇总">
 页脚：✨ 每日汇总由 <span>WorkBuddy</span> 自动生成 · 有问题或建议随时告诉我～ 🐰
 
-【第10步：写入文件】
-将HTML写入 /tmp/daily-summary/index.html
+【第10步：写入文件（强制 UTF-8）】
+将HTML以 UTF-8 编码（无 BOM）写入 /tmp/daily-summary/index.html。
+⚠️ 编码硬性要求：沙箱系统默认编码为 GBK/CP936，必须用 UTF-8 写入，否则中文会乱码（页面声明的是 UTF-8）。推荐一律用 Python 写入：
+  with open('/tmp/daily-summary/index.html','w',encoding='utf-8') as f: f.write(html)
+若使用 Write 工具，请确保写入的内容本身为 UTF-8 文本。写入后必须校验：
+  python3 -c "open('/tmp/daily-summary/index.html',encoding='utf-8').read(); print('UTF-8 OK')"
+若报 UnicodeDecodeError，说明被写成了 GBK，必须回到本步用 UTF-8 重新写入，禁止继续后续步骤。
 
-【第11步：更新history.json】
-将新用的单词、冷知识问题、HR标题、电影追加到 /tmp/daily-summary/每日汇总_history.json
+【第11步：更新history.json（强制 UTF-8）】
+将新用的单词、冷知识问题、HR标题、电影以 UTF-8 编码（无 BOM）追加到 /tmp/daily-summary/每日汇总_history.json。
+⚠️ 必须用 UTF-8 读写：open(路径,'r',encoding='utf-8') 读取、open(路径,'w',encoding='utf-8') 写回；禁止依赖系统默认编码（GBK）。追加后确保文件仍是合法 JSON（用 json.load 校验通过），否则重新生成。
 
 【第12步：推送（带重试，规避偶发TLS中断）】
 在 /tmp/daily-summary 目录执行：
 git config user.name "WorkBuddy Auto"
 git config user.email "workbuddy@auto"
 git remote set-url origin https://cenjiamao:github_pat_***REDACTED***@github.com/cenjiamao/daily-summary.git
+⚠️ 推送前编码校验（关键防乱码闸口，GBK 文件绝不推送）：
+python3 -c "d=open('/tmp/daily-summary/index.html','rb').read(); d.decode('utf-8'); print('index.html UTF-8 校验通过')"
+若报 UnicodeDecodeError：说明 index.html 被写成 GBK，立即回到【第10步】用 UTF-8 重新写入后再继续推送，严禁推送乱码文件。
+
 git add index.html 每日汇总_history.json
 git commit -m "Auto: YYYY-MM-DD 每日汇总"
 for i in 1 2 3 4; do git push origin main && break || sleep 3; done
